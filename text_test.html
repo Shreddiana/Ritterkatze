@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>⚔️ RITTERKATZE: PROFI-CHAOS EDITION 🛡️</title>
+  <style>
+    :root { --gold: #f1c40f; --bg: #1a1a2e; --danger: #e74c3c; --win: #2ecc71; --miau: #9b59b6; }
+    body { font-family: 'Comic Sans MS', cursive; background: var(--bg); color: white; display: flex; justify-content: center; padding: 20px; overflow-x: hidden; }
+    #game-container { width: 680px; background: #16213e; border: 5px solid var(--gold); border-radius: 20px; padding: 25px; position: relative; box-shadow: 0 0 60px #000; transition: background 0.2s; }
+    
+    /* Visuelle Effekte für Kämpfe */
+    .hit-flash { background: rgba(46, 204, 113, 0.3) !important; }
+    .dmg-flash { background: rgba(231, 76, 60, 0.3) !important; }
+
+    #visual-frame { width: 100%; height: 350px; background: #0f3460; border-radius: 15px; margin-bottom: 20px; display: flex; justify-content: center; align-items: center; overflow: hidden; border: 3px solid #4e4eef; box-shadow: inset 0 0 30px #000; }
+    #visual-frame img { max-width: 100%; max-height: 100%; object-fit: contain; animation: float 4s ease-in-out infinite; }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+    .stats { display: flex; justify-content: space-around; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 10px; margin-bottom: 15px; border-bottom: 3px solid var(--gold); font-weight: bold; }
+    .log { height: 180px; overflow-y: auto; background: #000; padding: 15px; margin-bottom: 15px; border-radius: 8px; font-size: 15px; border: 1px solid #7f8c8d; line-height: 1.4; }
+    .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    
+    button { background: linear-gradient(45deg, #e67e22, #f39c12); border: none; padding: 12px; color: white; cursor: pointer; border-radius: 10px; font-weight: bold; box-shadow: 0 4px 0 #a04000; transition: 0.1s; font-family: inherit; }
+    button:hover { filter: brightness(1.2); transform: translateY(-2px); }
+    button:active { transform: translateY(2px); box-shadow: 0 0 0; }
+    .miau-btn { background: linear-gradient(45deg, var(--miau), #8e44ad); grid-column: span 2; box-shadow: 0 4px 0 #4d265a; }
+    .squat-box { background: var(--danger); padding: 15px; text-align: center; border-radius: 10px; grid-column: span 2; font-size: 22px; font-weight: bold; }
+    
+    .shake { animation: shake 0.4s both; }
+    @keyframes shake { 10%, 90% { transform: translate3d(-4px, 0, 0); } 50% { transform: translate3d(8px, 0, 0); } }
+    input { padding: 12px; border-radius: 8px; border: 2px solid var(--gold); background: #0f3460; color: white; text-align: center; grid-column: span 2; margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+    <h2 style="text-align:center; color:var(--gold);">⚔️ RITTERKATZE: PROFI-CHAOS 🛡️</h2>
+    <div class="stats">
+      <span>❤️ HP: <b id="hp" style="color:#ff4757">3</b></span>
+      <span>🐟 Fisch: <b id="fish">3</b></span>
+      <span>⚔️ Schwerter: <b id="swords">2</b></span>
+      <span>🍀 Glück: <b id="luck">0%</b></span>
+    </div>
+    <div id="visual-frame"><div id="v-content" style="font-size:100px;">🏰</div></div>
+    <div id="log" class="log"><b>System:</b> Modus: Spannend & Lustig. Viel Erfolg!</div>
+    <div id="choices" class="choices"><button onclick="startGame()" style="grid-column: span 2;">DAS CHAOS STARTEN!</button></div>
+</div>
+
+<script>
+    const s = { 
+    hp: 3, fish: 3, luck: 0, 
+    vLake: false, vForest: false, 
+    milch: false, lama: false, 
+    stage: "menu",
+    // NEU: Die Statistik-Zähler
+    miaus: 0, 
+    stiefel: 0, 
+    fischeGefangen: 0,
+    fischeGegessen: 0 
+};
+
+    const container = document.getElementById('game-container');
+
+    
+
+ // 1. Der Miau-Generator (Ganz oben ins Script kopieren)
+function playMiau() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle'; 
+        osc.frequency.setValueAtTime(600, ctx.currentTime); 
+        osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.1); 
+        gain.gain.setValueAtTime(0.05, ctx.currentTime); // Schön leise
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.2);
+    } catch(e) { /* Falls der Browser Audio blockiert, passiert einfach nichts */ }
+}
+
+// 2. Die saubere Schreibmaschinen-Funktion
+async function log(m, c = "white") {
+    const l = document.getElementById("log");
+    const span = document.createElement("span");
+    span.style.color = c;
+    span.innerHTML = "<br>➤ "; 
+    l.appendChild(span);
+    
+    // NUR EINE SCHLEIFE!
+    for (let i = 0; i < m.length; i++) {
+        span.innerHTML += m[i];
+        l.scrollTop = l.scrollHeight;
+        
+        // Jedes 4. Zeichen ein leises Miau-Geräusch
+        if(i % 4 === 0) playMiau(); 
+        
+        // Geschwindigkeit (20ms)
+        await new Promise(r => setTimeout(r, 20)); 
+    }
+}
+
+
+
+    function flash(type) {
+        container.classList.add(type === 'hit' ? 'hit-flash' : 'dmg-flash');
+        if(type !== 'hit') { container.classList.add('shake'); }
+        setTimeout(() => {
+            container.classList.remove('hit-flash', 'dmg-flash', 'shake');
+        }, 300);
+    }
+
+    function setScene(file, emoji) {
+        const v = document.getElementById("v-content");
+        const i = new Image(); i.src = file;
+        i.onload = () => v.innerHTML = `<img src="${file}">`;
+        i.onerror = () => v.innerHTML = `<div style="font-size:100px">${emoji}</div>`;
+    }
+
+    function update() {
+        document.getElementById("hp").textContent = s.hp;
+        document.getElementById("fish").textContent = s.fish;
+        document.getElementById("swords").textContent = s.swords;
+        document.getElementById("luck").textContent = Math.round(s.luck * 100) + "%";
+        if(s.hp <= 0) { 
+            log("K.O.! Aber die Prinzessin belebt dich mit einem Kuss wieder.", "pink"); 
+            s.hp = 1; update(); 
+        }
+    }
+
+   let miauCounter = 0; 
+
+function clearUI() {
+    document.getElementById("choices").innerHTML = "";
+    
+    const m = document.createElement("button");
+    m.className = "miau-btn";
+    m.innerText = "🐾 MIAU";
+
+    m.onclick = () => {
+        miauCounter++;
+    
+        // 1. Die Liste (jetzt mit allen Kommas!)
+        const sprueche = [
+            "*Schnurrr* (Du fühlst dich flauschig)",
+            "VERRAT! Der Napf ist nur noch halb voll!",
+            "Die Banane beobachtet mich... ich mag das nicht.",
+            "MIAAAUUU! (Ein heroischer Kriegsschrei)", // <-- Hier war das Komma weg
+            "🐾 Du miaust heroisch. Die Mango zittert.", 
+            "🐾 MIAAAUUU! Bringt zwar nichts, aber du fühlst dich elegant", 
+            "🐾 Ich fiel vom Sofa. Absicht war es nicht. Verrat war es trotzdem.", 
+            "🐾 Die Banane urteilt. Ich akzeptiere mein Schicksal."
+        ];
+
+        // 2. Den Spruch auswählen (Name muss mit der Liste oben übereinstimmen)
+        const zufallsSpruch = sprueche[Math.floor(Math.random() * sprueche.length)];
+        
+        log(zufallsSpruch, "#9b59b6"); 
+        flash('hit');
+        
+        // 3. Das Glücksspiel-Element (alle 3 Klicks)
+        if (miauCounter >= 3) {
+            miauCounter = 0; 
+            
+            if (Math.random() > 0.5) {
+                s.luck += 0.1;
+                log("🍀 GÖTTLICHES MIAU! Dein Glück steigt um 10%!", "gold");
+                update(); // Wichtig, damit die %-Anzeige oben direkt springt!
+            } else {
+                s.hp--;
+                log("⚡ ZU LAUT! Ein Nachbar wirft einen Schuh. -1 HP", "red");
+                update();
+            }
+        }
+    };
+    
+    document.getElementById("choices").appendChild(m);
+}
+
+
+    function btn(t, a) {
+        const b = document.createElement("button"); b.innerText = t; b.onclick = a;
+        document.getElementById("choices").insertBefore(b, document.getElementById("choices").firstChild);
+    }
+
+    // --- RUNDEN-KAMPF MIT LAMA-SUPPORT ---
+    async function startCombat(enemy, eHP, winChance, next) {
+        clearUI();
+        let combo = 0;
+        log(`⚔️ KAMPF: ${enemy} (HP: ${eHP})`, "orange");
+        
+        while (eHP > 0 && s.hp > 0) {
+            log(`...`);
+            await new Promise(r => setTimeout(r, 700));
+            
+            // Lama greift jede 3. Runde an!
+            if(s.lama && combo > 0 && combo % 2 === 0) {
+                eHP--; log("🦙 LAMA-POWER! Das Lama spuckt und zieht 1 HP ab!", "gold");
+                flash('hit');
+            }
+
+            if (Math.random() < (winChance + s.luck + (combo * 0.05))) {
+                eHP--; combo++;
+                flash('hit');
+                log(`TREFFER! Combo: ${combo}x. ${enemy} HP: ${eHP}`, "#2ecc71");
+            } else {
+                s.hp--; combo = 0;
+                flash('dmg');
+                log(`AUTSCH! ${enemy} trifft! Deine HP: ${s.hp}`, "red");
+                update();
+            }
+            if (s.hp <= 0) break;
+        }
+        s.hp > 0 ? (log("SIEG!", "gold"), next()) : (log("Humpelnd weiter...", "gray"), next());
+    }
+
+    // --- SPIEL-LOGIK ---
+    function startGame() {
+        s.stage = "start"; clearUI(); setScene('schloss.png', '🧹');
+        log("Ein Staubsauger! 'WROOOAM!'", "red");
+        btn("⚔️ Kämpfen (2 HP)", () => {
+            if(s.swords > 0) { s.swords--; update(); startCombat("Sauger", 2, 0.6, () => hub("Sauger Matsch!")); }
+        });
+        btn("🐟 Bestechen (-1 Fisch)", () => { if(s.fish > 0) { s.fish--; hub("Er saugt den Fisch."); } });
+    }
+
+    function hub(msg) {
+    s.stage = "hub"; clearUI(); update(); setScene('ritterkatze.png', '📍');
+    if(msg) log(msg, "#2ecc71");
+
+    // 1. DER WASCHBÄR-BASAR (Erscheint, sobald du am See oder im Wald warst)
+    if (s.vLake || s.vForest) {
+        log("Ein Waschbär im Smoking flüstert: 'Pst! Tauschen?'", "silver");
+        
+        // TAUSCH 1: Müll gegen Schwert (Erhöht dauerhaft die Kampf-Chance)
+        // Wir prüfen, ob der Spieler "Müll" im Log stehen hatte oder wir führen s.trash ein
+        if (s.vLake && !s.swords_upgraded) { 
+            btn("👞 Gummistiefel gegen Schwert tauschen", () => {
+                s.swords_upgraded = true; // Neues Flag im State
+                s.luck += 0.2; update(); // Ein scharfes Schwert ist wie 20% mehr Glück!
+                log("Der Waschbär nimmt den Stiefel als Hut. 'Hier, ein scharfes Schwert!' (+20% Trefferchance)", "gold");
+                hub(); 
+            });
+        }
+
+        // TAUSCH 2: Fisch gegen reines Glück
+        if (s.fish > 0) {
+            btn("🎲 Fisch gegen Glück (+15%)", () => {
+                s.fish--; s.luck += 0.15; update();
+                log("Der Waschbär mampft. Dein Karma steigt! +15% Glück.", "gold");
+                hub(); 
+            });
+        }
+    }
+
+    // 2. SELBSTHEILUNG (Fisch essen)
+    if (s.hp < 3 && s.fish > 0) {
+        btn("🍱 Fisch selbst essen (+1 HP)", () => {
+            s.fish--; s.hp++; update();
+            log("Mampf! Du fühlst dich stärker. +1 HP", "#2ecc71");
+            hub(); 
+        });
+    }
+    
+    // 3. NAVIGATION
+    if(!s.vLake) btn("🌊 Zum See", () => lake());
+    if(!s.vForest) btn("🌲 In den Wald", () => forest());
+    
+    // Der Zoll-Trigger
+    if(s.vLake && s.vForest) {
+        log("Die Zollstation am Horizont wartet...", "orange");
+        btn("🚧 ZUR ZOLLSTATION", () => zoll());
+    }
+}
+
+
+function lake() {
+    clearUI(); setScene('see.png', '🌊');
+    log("Du stehst am Ufer. Das Wasser gluckst verdächtig.");
+
+    btn("🎣 Angeln (Glückssache)", () => {
+        const wurf = Math.random();
+        if (wurf > 0.4) { s.fish++; update(); log("Ein dicker Fisch! Petri Heil!", "#2ecc71"); }
+        else if (wurf > 0.1) { log("Du angelst einen alten Gummistiefel...", "gray"); }
+        else { s.hp--; update(); flash('dmg'); log("Die Angel schlägt zurück! -1 HP", "red"); }
+        lake(); 
+    });
+
+    if (!s.milch) {
+        btn("🏥 Seepferdchen heilen (-1 Fisch)", () => {
+            if (s.fish > 0) { s.fish--; s.milch = true; s.vLake = true; update(); log("Seepferdchen gesund! Du hast Zaubermilch.", "cyan"); lake(); }
+            else { log("Kein Fisch da!", "red"); }
+        });
+    }
+
+    if (!s.vForest) btn("🌲 Direkt in den Wald", () => forest());
+    btn("📍 Zurück zum Schloss", () => hub());
+}
+
+function forest() {
+    clearUI(); setScene('wald.png', '🌲');
+    if (!s.lama) log("Ein flauschiges Lama kaut hier lässig auf einem Blatt.", "silver");
+    else log("Dein Lama-Kumpel wartet schon ungeduldig.", "silver");
+
+    if (!s.lama) {
+        btn("🫂 Lama anknuddeln", () => { s.lama = true; s.vForest = true; hub("Das Lama folgt dir nun!"); });
+        btn("🍎 Apfel klauen (Kampf!)", () => { startCombat("Wildes Lama", 1, 0.4, () => { s.lama = true; s.vForest = true; hub(); }); });
+    }
+
+    btn("😴 Power-Nap (Risiko!)", () => {
+        if (Math.random() > 0.4) { s.hp = 3; update(); log("Erholsamer Schlaf! Volle HP.", "gold"); }
+        else { s.hp--; update(); flash('dmg'); log("Ein Ast traf dich! -1 HP", "red"); }
+        forest();
+    });
+
+    if (!s.vLake) btn("🌊 Direkt zum See", () => lake());
+    btn("📍 Zurück zum Schloss", () => hub());
+} // <--- Klammer war wichtig!
+
+function zoll() {
+    clearUI(); setScene('zoll.png', '🐦‍⬛');
+    log("Die Zoll-Möwen verlangen Maut!", "orange");
+
+    // LAMA-SPEZIAL-OPTION (Nur wenn du das Lama hast)
+    if (s.lama) {
+        btn("🦙 Lama-Spucke einsetzen!", () => {
+            log("Das Lama spuckt die Möwen weg! Der Weg ist frei.", "gold");
+            dragon(); 
+        });
+    }
+
+    btn("🎰 Hütchenspiel (1 Fisch)", () => {
+        if(s.fish > 0) {
+            s.fish--; update();
+            if(Math.random() > 0.5) { log("GEWONNEN!", "gold"); dragon(); }
+            else { log("VERLOREN!", "red"); zoll(); }
+        } else { log("Kein Fisch zum Setzen!"); }
+    });
+
+    btn("🧶 Wollknäuel (50/50)", () => {
+        if(Math.random() > 0.5) { log("Du huschst vorbei!", "#2ecc71"); dragon(); }
+        else { s.hp--; update(); flash('dmg'); log("Pech! Die Möwen picken dich.", "red"); zoll(); }
+    });
+}
+
+
+    function dragon() {
+    clearUI(); 
+    setScene('drache.png', '🐉');
+    log("Der Drache versperrt den Pass! Er sieht hungrig aus.", "orange");
+
+    // 1. Die atmosphärische Einleitung
+    log("Hinter der Zollstation bebt die Erde. Ein riesiger, smaragdgrüner Drache versperrt den Pass!", "orange");
+    log("'WER WAGT ES, MEINEN SCHLAF ZU STÖREN?', dröhnt seine Stimme.", "red");
+
+    // Option A: Das Quiz (Der Standard-Weg)
+    btn("🥒 Direkt zum Gurken-Quiz (Risiko!)", () => quiz());
+
+    // Option B: Bestechen (Die neue Zwischen-Option)
+    if (s.fish > 1) {
+        btn("🐟 Bestechen (2 Fische geben)", () => {
+            s.fish -= 2; s.luck += 0.2; update();
+            log("Der Drache mampft die Fische. 'Na gut, ich stelle eine SEHR leichte Frage!'", "gold");
+            quiz(); // Er ruft das Quiz auf, aber du hast mehr Glück
+        });
+    }
+
+    // Option C: Die Milch-Verhandlung
+    if (s.milch) {
+        btn("🥛 Milch gegen Lösung tauschen", () => {
+            log("Der Drache trinkt die Milch und flüstert dir die Antwort ins Ohr...", "cyan");
+            s.milch = false; // Milch ist weg
+            s.luck = 1.0; // Dein Glück ist jetzt so hoch, dass du fast nicht verlieren kannst
+            update();
+            quiz(); 
+        });
+    }
+}
+
+
+function quiz() {
+    clearUI(); 
+    setScene('gurke.png', '🥒');
+    log("Der Drache verwandelt sich in eine sprechende Gurke (warum auch immer).", "silver");
+    
+    // Ein Pool aus mehr Fragen für die Abwechslung
+    const fragen = [
+        {q: "Was ist schwerer: Ein Kilo Gold oder ein Kilo Katzenminze?", a: "Beides gleich", f: "Gold natürlich"},
+        {q: "Welches Tier regiert heimlich die Welt?", a: "Katzen", f: "Echsenmenschen"},
+        {q: "Warum sind Gurken grün?", a: "Tarnung im Salat", f: "Weil sie wütend sind"}
+    ];
+    
+    const r = fragen[Math.floor(Math.random() * fragen.length)];
+    log("RÄTSEL: " + r.q, "orange");
+
+    // Antworten mischen (Glücks-Element)
+    const antworten = [
+        {t: r.a, correct: true},
+        {t: r.f, correct: false}
+    ].sort(() => Math.random() - 0.5);
+
+    antworten.forEach(ans => {
+        btn(ans.t, () => {
+            if (ans.correct) {
+                log("Der Drache ist verblüfft. 'Richtig! Du bist klüger als du aussiehst.'", "#2ecc71");
+                finale();
+            } else {
+                s.hp--; update(); flash('dmg');
+                log("'FALSCH! Spür meinen Zorn!'", "red");
+                quiz(); // Neue Frage, neues Glück
+            }
+        });
+    });
+}
+
+
+    function finale() {
+    clearUI(); 
+    setScene('mango.png', '🥭');
+    
+    log("Die RIESEN-MANGO funkelt bedrohlich.", "purple");
+    log("'Nenne unser Datum (TT.MM.JJJJ) oder verschwinde!', dröhnt sie.", "red");
+
+    const i = document.createElement('input'); 
+    i.id = "dat"; 
+    i.placeholder = "TT.MM.JJJJ";
+    document.getElementById('choices').appendChild(i);
+
+    // 1. Der Haupt-Button (Der Test)
+    btn("💎 Bestätigen & Kämpfen", () => { 
+        const eingabe = document.getElementById('dat').value;
+        if (eingabe === "21.02.2020") {
+            log("Die Mango weint vor Glück! Der finale Kampf beginnt!", "gold");
+            mangoFight(); 
+        } else {
+            s.hp = 0; update(); flash('dmg');
+            log("DIE MANGO IST ENTSETZT! 'WIE KONNTEST DU DAS VERGESSEN?!'", "red");
+            // Hier löschen wir die Tipp-Buttons, damit man nur noch Neustart sieht
+            clearUI();
+            btn("💔 Aus Fehlern lernen (Neustart)", () => location.reload());
+        }
+    });
+
+    // 2. TIPP-OPTION: Fisch (Nur wenn Fisch > 0)
+    if (s.fish > 0) {
+        btn("🐟 Fisch für einen Tipp opfern", () => {
+            if (s.fish > 0) { // Doppelte Sicherheit!
+                s.fish--; update();
+                log("Mango: 'Es war im Jahr 2020...'", "cyan");
+                // Wir laden das Finale neu, damit der Button verschwindet, wenn Fisch = 0
+                finale(); 
+            }
+        });
+    }
+
+    // 3. TIPP-OPTION: Milch (Nur wenn Milch vorhanden)
+    if (s.milch) {
+        btn("🥛 Milch für den großen Tipp", () => {
+            if (s.milch) {
+                s.milch = false; update();
+                log("Mango: 'Es war ein 21. Februar...'", "gold");
+                finale(); 
+            }
+        });
+    }
+}
+
+function mangoFight() {
+    startCombat("RIESEN-MANGO", 4, 0.5, () => {
+        clearUI();
+        setScene('happyend.png', '👸❤️🐱'); 
+        
+        log("💥 DIE MANGO IST BESIEGT!", "gold");
+        log("Hier ist deine Helden-Statistik:", "cyan");
+        
+        // Die Statistik-Anzeige
+        log(`🐾 Heroische Miaus: ${s.miaus}`, "white");
+        log(`👞 Geangelte Gummistiefel: ${s.stiefel}`, "white");
+        log(`🐟 Fische gefangen: ${s.fischeGefangen}`, "white");
+        log(`😋 Fische verspeist: ${s.fischeGegessen}`, "white");
+        log(`🍀 Finales Glück: ${Math.round(s.luck * 100)}%`, "gold");
+
+        log("SIEG! Die Prinzessin ist stolz auf dich!", "pink");
+
+        const re = document.createElement("button");
+        re.style.gridColumn = "span 2";
+        re.innerText = "👑 NOCHMAL SPIELEN";
+        re.onclick = () => location.reload();
+        document.getElementById("choices").appendChild(re);
+    });
+}
+
+
+
+    update();
+</script>
+</body>
+</html>
+
+
+
